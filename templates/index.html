@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Resume Analyzer Pro — Intelligent ATS</title>
+    <meta name="description" content="Professional AI-powered Resume Analyzer and Applicant Tracking System. Upload your resume, compare against job descriptions, and get instant skill gap analysis." />
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { outfit: ['Outfit', 'sans-serif'] },
+                    colors: {
+                        dark: { 900: '#060913', 800: '#0f172a', 700: '#1e293b', 600: '#334155' },
+                        accent: { indigo: '#818cf8', purple: '#c084fc', emerald: '#34d399', rose: '#f87171', amber: '#fbbf24' }
+                    },
+                    animation: {
+                        'float': 'float 20s infinite ease-in-out',
+                        'float-delay': 'float 20s infinite ease-in-out 10s',
+                        'pulse-glow': 'pulseGlow 2s infinite ease-in-out',
+                        'fade-in-up': 'fadeInUp 0.6s ease-out forwards',
+                        'spin-slow': 'spin 3s linear infinite',
+                    },
+                    keyframes: {
+                        float: { '0%, 100%': { transform: 'translateY(0) scale(1)' }, '50%': { transform: 'translateY(50px) scale(1.1)' } },
+                        pulseGlow: { '0%, 100%': { boxShadow: '0 4px 15px rgba(129,140,248,0.4)' }, '50%': { boxShadow: '0 8px 30px rgba(129,140,248,0.7)' } },
+                        fadeInUp: { '0%': { opacity: '0', transform: 'translateY(24px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- React 18 CDN -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- Babel Standalone (JSX compiler) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Outfit', sans-serif; background: #060913; color: #f8fafc; min-height: 100vh; overflow-x: hidden; }
+
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: linear-gradient(135deg, #818cf8, #c084fc); border-radius: 4px; }
+
+        .glass {
+            background: rgba(15, 23, 42, 0.7);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 20px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            transition: box-shadow 0.3s ease;
+        }
+        .glass:hover {
+            box-shadow: 0 30px 60px -12px rgba(0, 0, 0, 0.6), 0 0 20px 0 rgba(129, 140, 248, 0.25);
+        }
+
+        .gradient-text {
+            background: linear-gradient(135deg, #818cf8, #c084fc);
+            -webkit-background-clip: text; background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .gradient-text-green {
+            background: linear-gradient(135deg, #34d399, #60a5fa);
+            -webkit-background-clip: text; background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .progress-track {
+            height: 14px; border-radius: 10px; background: rgba(0,0,0,0.4);
+            overflow: hidden; box-shadow: inset 0 2px 4px rgba(0,0,0,0.5);
+        }
+        .progress-fill {
+            height: 100%; border-radius: 10px;
+            transition: width 1.5s cubic-bezier(0.4,0,0.2,1);
+            box-shadow: 0 0 10px rgba(255,255,255,0.3);
+        }
+        .gradient-primary { background: linear-gradient(135deg, #818cf8, #c084fc); }
+        .gradient-secondary { background: linear-gradient(135deg, #34d399, #60a5fa); }
+        .gradient-warm { background: linear-gradient(135deg, #f43f5e, #f97316); }
+
+        .tag { padding: 6px 14px; border-radius: 8px; font-size: 0.85rem; font-weight: 500; transition: transform 0.2s ease; display: inline-block; }
+        .tag:hover { transform: scale(1.08); }
+        .tag-matched { background: rgba(52,211,153,0.15); color: #6ee7b7; border: 1px solid rgba(52,211,153,0.3); }
+        .tag-missing { background: rgba(244,63,94,0.15); color: #fda4af; border: 1px solid rgba(244,63,94,0.3); }
+        .tag-edu { background: rgba(245,158,11,0.12); color: #fcd34d; border: 1px solid rgba(245,158,11,0.25); }
+
+        .file-input-wrapper { position: relative; cursor: pointer; }
+        .file-input-wrapper input[type="file"] {
+            opacity: 0; position: absolute; top: 0; left: 0; width: 100%; height: 100%; cursor: pointer;
+        }
+
+        @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+        .loading-shimmer {
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.05), transparent);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite;
+        }
+
+        .input-field {
+            width: 100%; background: rgba(15,23,42,0.8); border: 1px solid rgba(255,255,255,0.12);
+            color: #f8fafc; padding: 14px 16px; border-radius: 12px; font-family: 'Outfit', sans-serif;
+            font-size: 0.95rem; transition: all 0.3s ease; resize: vertical;
+        }
+        .input-field:focus {
+            outline: none; border-color: #818cf8; box-shadow: 0 0 0 3px rgba(129,140,248,0.2);
+        }
+        .input-field:disabled { opacity: 0.4; cursor: not-allowed; }
+        textarea.input-field { min-height: 130px; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    {% raw %}
+    <script type="text/babel">
+        const { useState, useRef } = React;
+
+        /* ═══════════════════════════════════════════
+           NAVBAR
+        ═══════════════════════════════════════════ */
+        function Navbar() {
+            return (
+                <nav className="w-full py-5 px-6 md:px-10">
+                    <div className="max-w-7xl mx-auto flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className="text-3xl" style={{filter:'drop-shadow(0 0 15px rgba(129,140,248,0.4))'}}>🚀</div>
+                            <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-white">
+                                AI Resume Analyzer <span className="gradient-text">Pro</span>
+                            </h1>
+                        </div>
+                        <p className="hidden md:block text-slate-400 text-sm font-light">
+                            Intelligent Applicant Tracking System
+                        </p>
+                    </div>
+                </nav>
+            );
+        }
+
+        /* ═══════════════════════════════════════════
+           UPLOAD FORM
+        ═══════════════════════════════════════════ */
+        function UploadForm({ onAnalyze, isLoading }) {
+            const [resumeText, setResumeText] = useState('');
+            const [jobDescription, setJobDescription] = useState('');
+            const [selectedFile, setSelectedFile] = useState(null);
+            const [jdExp, setJdExp] = useState('');
+            const fileInputRef = useRef(null);
+
+            const handleFileChange = (e) => {
+                const file = e.target.files[0];
+                if (file) { setSelectedFile(file); setResumeText(''); }
+            };
+
+            const clearFile = () => {
+                setSelectedFile(null);
+                if (fileInputRef.current) fileInputRef.current.value = '';
+            };
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                if (!selectedFile && !resumeText.trim()) {
+                    alert('Please provide a resume — either upload a file or paste the text.');
+                    return;
+                }
+                if (!jobDescription.trim()) {
+                    alert('Please provide a job description to compare against.');
+                    return;
+                }
+                const formData = new FormData();
+                if (selectedFile) formData.append('resume_file', selectedFile);
+                formData.append('resume_text', resumeText);
+                formData.append('jd_text', jobDescription);
+                formData.append('jd_exp', jdExp || 0);
+                onAnalyze(formData);
+            };
+
+            return (
+                <div className="glass p-7 animate-[fadeInUp_0.6s_ease-out_forwards]">
+                    <div className="mb-5 pb-3 border-b border-white/10">
+                        <h2 className="text-xl font-semibold text-white">Analysis Parameters</h2>
+                    </div>
+                    <form onSubmit={handleSubmit}>
+                        {/* Resume */}
+                        <div className="mb-5">
+                            <label className="block mb-2 text-sm font-medium text-slate-400">Candidate Resume</label>
+                            <textarea
+                                className="input-field"
+                                placeholder="Paste the candidate's resume here..."
+                                value={resumeText}
+                                onChange={(e) => setResumeText(e.target.value)}
+                                disabled={!!selectedFile || isLoading}
+                            />
+                            <div className="file-input-wrapper mt-3">
+                                <input type="file" ref={fileInputRef} accept=".pdf,.docx" onChange={handleFileChange} disabled={isLoading} />
+                                <div className={`block border border-dashed rounded-xl p-3.5 text-center text-sm transition-all duration-200 cursor-pointer ${
+                                    selectedFile
+                                        ? 'border-emerald-400 text-emerald-400 bg-emerald-400/5'
+                                        : 'border-white/30 text-slate-400 bg-white/[0.03] hover:bg-white/10 hover:border-[#818cf8] hover:text-white'
+                                }`}>
+                                    {selectedFile ? `📄 ${selectedFile.name}` : '📁 Upload File (.pdf, .docx)'}
+                                </div>
+                            </div>
+                            {selectedFile && (
+                                <button type="button" onClick={clearFile} className="mt-2 text-xs text-rose-400 hover:text-rose-300 transition-colors">
+                                    ✕ Remove file
+                                </button>
+                            )}
+                        </div>
+
+                        {/* Job Description */}
+                        <div className="mb-5">
+                            <label className="block mb-2 text-sm font-medium text-slate-400">Job Description</label>
+                            <textarea
+                                className="input-field"
+                                placeholder="Paste the exact job description here..."
+                                value={jobDescription}
+                                onChange={(e) => setJobDescription(e.target.value)}
+                                disabled={isLoading}
+                            />
+                        </div>
+
+                        {/* Experience */}
+                        <div className="mb-5">
+                            <label className="block mb-2 text-sm font-medium text-slate-400">Required Experience (Years)</label>
+                            <input
+                                type="number" className="input-field" placeholder="e.g. 3 (optional)"
+                                min="0" value={jdExp} onChange={(e) => setJdExp(e.target.value)} disabled={isLoading}
+                            />
+                        </div>
+
+                        {/* Submit */}
+                        <button
+                            type="submit" disabled={isLoading}
+                            className="w-full py-4 bg-gradient-to-r from-[#818cf8] to-[#c084fc] border-none rounded-xl text-white text-lg font-semibold cursor-pointer mt-2 shadow-lg hover:-translate-y-0.5 hover:shadow-xl active:translate-y-[1px] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 animate-[pulseGlow_2s_infinite_ease-in-out] flex items-center justify-center gap-2"
+                            style={{boxShadow:'0 4px 15px rgba(129,140,248,0.4)'}}
+                        >
+                            {isLoading ? (
+                                <React.Fragment>
+                                    <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                                    </svg>
+                                    Analyzing Resume...
+                                </React.Fragment>
+                            ) : 'Analyze Match'}
+                        </button>
+                    </form>
+                </div>
+            );
+        }
+
+        /* ═══════════════════════════════════════════
+           PROFILE CARD
+        ═══════════════════════════════════════════ */
+        function ProfileCard({ data }) {
+            if (!data) return null;
+            return (
+                <div className="glass p-6 animate-[fadeInUp_0.6s_ease-out_0.1s_forwards] opacity-0">
+                    <div className="mb-5 pb-3 border-b border-white/10">
+                        <h2 className="text-lg font-semibold text-white flex items-center gap-2">📄 Candidate Profile</h2>
+                    </div>
+                    <div className="flex items-start gap-4">
+                        <div className="text-4xl bg-white/5 p-3 rounded-full border border-white/10 shrink-0">👤</div>
+                        <div className="flex-1 min-w-0">
+                            <h3 className="text-xl font-semibold text-white mb-3 truncate">
+                                {data.name !== 'Not Found' ? data.name : 'Unknown Candidate'}
+                            </h3>
+                            <div className="space-y-2">
+                                <p className="text-sm text-slate-400 flex items-center gap-2">
+                                    <span className="text-base">📧</span>
+                                    <span className={data.email !== 'Not Found' ? 'text-slate-300' : 'text-slate-500 italic'}>{data.email}</span>
+                                </p>
+                                <p className="text-sm text-slate-400 flex items-center gap-2">
+                                    <span className="text-base">📱</span>
+                                    <span className={data.phone !== 'Not Found' ? 'text-slate-300' : 'text-slate-500 italic'}>{data.phone}</span>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    {data.education && data.education.length > 0 && (
+                        <div className="mt-5 pt-4 border-t border-white/10">
+                            <h4 className="text-sm font-medium text-slate-400 mb-3 flex items-center gap-2">🎓 Education</h4>
+                            <div className="flex flex-wrap gap-2">
+                                {data.education.slice(0, 4).map((edu, i) => (
+                                    <span key={i} className="tag tag-edu text-xs">{edu}</span>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        /* ═══════════════════════════════════════════
+           SCORE CARD
+        ═══════════════════════════════════════════ */
+        function ScoreCard({ data }) {
+            if (!data) return null;
+            const isPassed = data.status === 'Passed';
+            const scores = [
+                { label: 'Similarity Score', value: data.similarity_score, cls: 'gradient-primary' },
+                { label: 'Skill Match Score', value: data.skill_match_score, cls: 'gradient-secondary' },
+            ];
+
+            return (
+                <div className="glass p-6 animate-[fadeInUp_0.6s_ease-out_0.2s_forwards] opacity-0">
+                    <div className="mb-5 pb-3 border-b border-white/10 flex items-center justify-between">
+                        <h2 className="text-lg font-semibold text-white flex items-center gap-2">📊 Match Score</h2>
+                        <span className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider border ${
+                            isPassed ? 'bg-emerald-400/15 text-emerald-400 border-emerald-400/30' : 'bg-rose-400/15 text-rose-400 border-rose-400/30'
+                        }`}>{data.status}</span>
+                    </div>
+
+                    {/* Final Score */}
+                    <div className="bg-gradient-to-br from-[#818cf8]/10 to-[#c084fc]/10 border border-[#c084fc]/30 rounded-2xl p-6 text-center mb-6">
+                        <p className="text-sm text-slate-400 uppercase tracking-wider mb-2 font-medium">Final Score</p>
+                        <p className="text-5xl font-extrabold gradient-text mb-3">{data.final_score.toFixed(1)}%</p>
+                        <div className="progress-track mt-2">
+                            <div className="progress-fill gradient-primary" style={{width: `${Math.min(data.final_score, 100)}%`}} />
+                        </div>
+                    </div>
+
+                    {/* Sub-scores */}
+                    <div className="grid grid-cols-2 gap-3 mb-4">
+                        {scores.map((s, i) => (
+                            <div key={i} className="bg-[#1e293b]/60 border border-white/10 rounded-xl p-4 text-center hover:scale-105 transition-transform duration-200">
+                                <p className="text-xs text-slate-400 uppercase tracking-wide mb-2 font-medium">{s.label}</p>
+                                <p className="text-2xl font-bold text-white">{s.value.toFixed(1)}%</p>
+                                <div className="progress-track mt-2">
+                                    <div className={`progress-fill ${s.cls}`} style={{width: `${Math.min(s.value, 100)}%`}} />
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Experience */}
+                    {data.experience_match > 0 && (
+                        <div className="bg-[#1e293b]/60 border border-white/10 rounded-xl p-4 text-center hover:scale-105 transition-transform duration-200">
+                            <p className="text-xs text-slate-400 uppercase tracking-wide mb-2 font-medium">Experience Match</p>
+                            <p className="text-2xl font-bold text-white">{data.experience_match.toFixed(1)}%</p>
+                            <div className="progress-track mt-2">
+                                <div className="progress-fill gradient-warm" style={{width: `${Math.min(data.experience_match, 100)}%`}} />
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        /* ═══════════════════════════════════════════
+           SKILLS CARD
+        ═══════════════════════════════════════════ */
+        function SkillsCard({ matchedSkills, missingSkills }) {
+            if (!matchedSkills && !missingSkills) return null;
+            return (
+                <div className="glass p-6 animate-[fadeInUp_0.6s_ease-out_0.3s_forwards] opacity-0">
+                    <div className="mb-5 pb-3 border-b border-white/10">
+                        <h2 className="text-lg font-semibold text-white flex items-center gap-2">🧠 Skill Analysis</h2>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        {/* Matched */}
+                        <div className="bg-[#1e293b]/40 border border-white/10 rounded-xl p-5">
+                            <h3 className="text-sm font-semibold text-emerald-400 mb-3 flex items-center gap-2">
+                                ✅ Matched Skills
+                                <span className="bg-emerald-400/15 text-emerald-400 text-xs px-2 py-0.5 rounded-full">{matchedSkills?.length || 0}</span>
+                            </h3>
+                            <div className="flex flex-wrap gap-2">
+                                {matchedSkills && matchedSkills.length > 0
+                                    ? matchedSkills.map((s, i) => <span key={i} className="tag tag-matched">{s}</span>)
+                                    : <p className="text-sm text-slate-500 italic">No matching skills found</p>}
+                            </div>
+                        </div>
+                        {/* Missing */}
+                        <div className="bg-[#1e293b]/40 border border-white/10 rounded-xl p-5">
+                            <h3 className="text-sm font-semibold text-rose-400 mb-3 flex items-center gap-2">
+                                ⚠️ Skill Gap
+                                <span className="bg-rose-400/15 text-rose-400 text-xs px-2 py-0.5 rounded-full">{missingSkills?.length || 0}</span>
+                            </h3>
+                            <div className="flex flex-wrap gap-2">
+                                {missingSkills && missingSkills.length > 0
+                                    ? missingSkills.map((s, i) => <span key={i} className="tag tag-missing">{s}</span>)
+                                    : <p className="text-sm text-slate-500 italic">No skill gaps — excellent match!</p>}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        /* ═══════════════════════════════════════════
+           SUGGESTIONS CARD
+        ═══════════════════════════════════════════ */
+        function SuggestionsCard({ suggestions }) {
+            if (!suggestions) return null;
+            const isPositive = suggestions.toLowerCase().includes('great job');
+            return (
+                <div className="glass p-6 animate-[fadeInUp_0.6s_ease-out_0.4s_forwards] opacity-0">
+                    <div className="mb-5 pb-3 border-b border-white/10">
+                        <h2 className="text-lg font-semibold text-white flex items-center gap-2">💡 Suggestions</h2>
+                    </div>
+                    <div className={`rounded-xl p-5 border ${isPositive ? 'bg-emerald-400/5 border-emerald-400/20' : 'bg-amber-400/5 border-amber-400/20'}`}>
+                        <div className="flex gap-3">
+                            <span className="text-2xl shrink-0">{isPositive ? '🎉' : '📝'}</span>
+                            <p className={`text-sm leading-relaxed ${isPositive ? 'text-emerald-300' : 'text-amber-200'}`}>{suggestions}</p>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        /* ═══════════════════════════════════════════
+           LINKS CARD
+        ═══════════════════════════════════════════ */
+        function LinksCard({ links }) {
+            if (!links || links.length === 0) return null;
+
+            const getIcon = (type) => {
+                const t = type.toLowerCase();
+                if (t === 'linkedin') return '🔗';
+                if (t === 'github') return '💻';
+                if (t === 'portfolio') return '🎨';
+                return '🌐';
+            };
+            const getColor = (type) => {
+                const t = type.toLowerCase();
+                if (t === 'linkedin') return 'text-blue-400 border-blue-400/30 bg-blue-400/10 hover:bg-blue-400/20';
+                if (t === 'github') return 'text-slate-300 border-slate-400/30 bg-slate-400/10 hover:bg-slate-400/20';
+                if (t === 'portfolio') return 'text-purple-400 border-purple-400/30 bg-purple-400/10 hover:bg-purple-400/20';
+                return 'text-cyan-400 border-cyan-400/30 bg-cyan-400/10 hover:bg-cyan-400/20';
+            };
+
+            return (
+                <div className="glass p-6 animate-[fadeInUp_0.6s_ease-out_0.5s_forwards] opacity-0">
+                    <div className="mb-5 pb-3 border-b border-white/10">
+                        <h2 className="text-lg font-semibold text-white flex items-center gap-2">🔗 Links</h2>
+                    </div>
+                    <div className="space-y-3">
+                        {links.map((link, i) => (
+                            <a key={i} href={link.url} target="_blank" rel="noopener noreferrer"
+                               className={`flex items-center gap-3 p-3.5 rounded-xl border transition-all duration-200 group no-underline ${getColor(link.type)}`}>
+                                <span className="text-lg">{getIcon(link.type)}</span>
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-medium">{link.type}</p>
+                                    <p className="text-xs text-slate-400 truncate group-hover:text-slate-300 transition-colors">{link.url}</p>
+                                </div>
+                                <span className="text-slate-500 group-hover:text-white transition-colors text-sm">↗</span>
+                            </a>
+                        ))}
+                    </div>
+                </div>
+            );
+        }
+
+
+
+        /* ═══════════════════════════════════════════
+           LOADING SPINNER
+        ═══════════════════════════════════════════ */
+        function LoadingSpinner() {
+            return (
+                <div className="glass p-10 flex flex-col items-center justify-center animate-[fadeInUp_0.6s_ease-out_forwards]">
+                    <div className="relative w-20 h-20 mb-6">
+                        <div className="absolute inset-0 rounded-full border-4 border-white/10"/>
+                        <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-[#818cf8] border-r-[#c084fc] animate-spin"/>
+                        <div className="absolute inset-2 rounded-full border-4 border-transparent border-b-[#34d399] animate-[spin_3s_linear_infinite]"/>
+                    </div>
+                    <h3 className="text-lg font-semibold text-white mb-2">Analyzing Resume...</h3>
+                    <p className="text-sm text-slate-400 text-center max-w-xs">
+                        Extracting candidate details, matching skills, and calculating compatibility scores.
+                    </p>
+                    <div className="w-full mt-6 space-y-3">
+                        <div className="h-3 rounded-full bg-white/5 loading-shimmer"/>
+                        <div className="h-3 rounded-full bg-white/5 loading-shimmer w-3/4"/>
+                        <div className="h-3 rounded-full bg-white/5 loading-shimmer w-1/2"/>
+                    </div>
+                </div>
+            );
+        }
+
+        /* ═══════════════════════════════════════════
+           MAIN APP
+        ═══════════════════════════════════════════ */
+        function App() {
+            const [results, setResults] = useState(null);
+            const [isLoading, setIsLoading] = useState(false);
+            const [error, setError] = useState(null);
+
+            const handleAnalyze = async (formData) => {
+                setIsLoading(true);
+                setError(null);
+                setResults(null);
+
+                try {
+                    const response = await fetch('/analyze', { method: 'POST', body: formData });
+                    const data = await response.json();
+                    if (data.error) {
+                        setError(data.error);
+                    } else {
+                        setResults(data);
+                    }
+                } catch (err) {
+                    setError('Failed to analyze resume. Please check your connection and try again.');
+                } finally {
+                    setIsLoading(false);
+                }
+            };
+
+            return (
+                <div className="relative min-h-screen">
+                    {/* Background Shapes */}
+                    <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none">
+                        <div className="absolute w-[400px] h-[400px] bg-indigo-500 rounded-full blur-[100px] opacity-40 -top-24 -left-24 animate-[float_20s_infinite_ease-in-out]"/>
+                        <div className="absolute w-[500px] h-[500px] bg-purple-500 rounded-full blur-[100px] opacity-30 -bottom-48 -right-24 animate-[float_20s_infinite_ease-in-out_10s]"/>
+                        <div className="absolute w-[300px] h-[300px] bg-emerald-500 rounded-full blur-[120px] opacity-20 top-1/2 left-1/2 animate-[float_20s_infinite_ease-in-out_5s]"/>
+                    </div>
+
+                    <div className="relative z-10">
+                        <Navbar />
+
+                        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-16">
+                            <div className="text-center mb-10">
+                                <p className="text-slate-400 text-lg font-light">
+                                    Upload a resume, paste a job description, and get instant compatibility analysis
+                                </p>
+                            </div>
+
+                            {/* 2-Column Grid */}
+                            <div className="grid grid-cols-1 lg:grid-cols-[minmax(350px,1fr)_minmax(0,2fr)] gap-8 items-start">
+                                {/* LEFT */}
+                                <div className="lg:sticky lg:top-8">
+                                    <UploadForm onAnalyze={handleAnalyze} isLoading={isLoading} />
+                                </div>
+
+                                {/* RIGHT */}
+                                <div className="space-y-6">
+                                    {/* Error */}
+                                    {error && (
+                                        <div className="glass p-6 animate-[fadeInUp_0.6s_ease-out_forwards] border-rose-500/30">
+                                            <div className="flex items-start gap-3">
+                                                <span className="text-2xl">❌</span>
+                                                <div>
+                                                    <h3 className="text-lg font-semibold text-rose-400 mb-1">Analysis Failed</h3>
+                                                    <p className="text-sm text-slate-400">{error}</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Loading */}
+                                    {isLoading && <LoadingSpinner />}
+
+                                    {/* Results */}
+                                    {results && !isLoading && (
+                                        <React.Fragment>
+                                            <div className="glass p-5 animate-[fadeInUp_0.6s_ease-out_forwards] flex items-center justify-between">
+                                                <h2 className="text-xl font-semibold text-white">Evaluation Results</h2>
+                                                <span className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider border ${
+                                                    results.status === 'Passed'
+                                                        ? 'bg-emerald-400/15 text-emerald-400 border-emerald-400/30'
+                                                        : 'bg-rose-400/15 text-rose-400 border-rose-400/30'
+                                                }`}>{results.status}</span>
+                                            </div>
+
+                                            <ProfileCard data={results} />
+                                            <ScoreCard data={results} />
+                                            <SkillsCard matchedSkills={results.matched_skills} missingSkills={results.missing_skills} />
+                                            <SuggestionsCard suggestions={results.suggestions} />
+                                            <LinksCard links={results.links} />
+
+                                        </React.Fragment>
+                                    )}
+
+                                    {/* Empty State */}
+                                    {!results && !isLoading && !error && (
+                                        <div className="glass p-12 text-center animate-[fadeInUp_0.6s_ease-out_forwards]">
+                                            <div className="text-6xl mb-4">📋</div>
+                                            <h3 className="text-xl font-semibold text-white mb-2">Ready to Analyze</h3>
+                                            <p className="text-sm text-slate-400 max-w-md mx-auto">
+                                                Upload a resume and paste a job description on the left panel, then click "Analyze Match" to see detailed evaluation results here.
+                                            </p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </main>
+
+                        <footer className="relative z-10 text-center py-8 border-t border-white/5">
+                            <p className="text-xs text-slate-500">AI Resume Analyzer Pro — Powered by TF-IDF, spaCy NER & Cosine Similarity</p>
+                        </footer>
+                    </div>
+                </div>
+            );
+        }
+
+        /* ═══════════════════════════════════════════
+           RENDER
+        ═══════════════════════════════════════════ */
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+    {% endraw %}
+</body>
+</html>
