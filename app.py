@@ -16,7 +16,13 @@ except OSError:
     nlp_model = None
 
 try:
-    st_model = SentenceTransformer('all-MiniLM-L6-v2')
+    model = None
+
+    def get_model():
+        global model
+        if model is None:
+         model = SentenceTransformer('all-MiniLM-L6-v2')
+        return model
 except Exception as e:
     print("WARNING: SentenceTransformer model failed to load:", str(e))
     st_model = None
