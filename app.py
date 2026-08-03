@@ -15,17 +15,13 @@ except OSError:
     print("WARNING: spacy en_core_web_sm model is missing. NLP features will be limited.")
     nlp_model = None
 
-try:
-    model = None
+model = None
 
-    def get_model():
-        global model
-        if model is None:
-         model = SentenceTransformer('all-MiniLM-L6-v2')
-        return model
-except Exception as e:
-    print("WARNING: SentenceTransformer model failed to load:", str(e))
-    st_model = None
+def get_model():
+    global model
+    if model is None:
+        model = SentenceTransformer("all-MiniLM-L6-v2")
+    return model
 
 # File handling
 import pdfplumber  # type: ignore
@@ -34,6 +30,8 @@ from docx import Document  # type: ignore
 app = Flask(__name__)
 CORS(app)  # Enable CORS for React frontend
 def semantic_similarity(text1, text2):
+    if nlp_model is None:
+        return 0
     doc1 = nlp_model(text1)
     doc2 = nlp_model(text2)
     return doc1.similarity(doc2)
@@ -45,7 +43,7 @@ def preprocess(text):
     if not text:
         return ""
     text = text.lower()
-    text = re.sub(r'[^a-z0-9\s+#.]', ' ', text)
+    text = re.sub(r'[^a-zA-Z0-9\s+.#/-]', ' ', text)
     return text
 def is_valid_text(text):
     words = text.split()
@@ -91,7 +89,19 @@ SKILLS_DB = [
 "microservices","rest api","graphql",
 "unit testing","integration testing","selenium","cypress","jest","pytest",
 "communication","teamwork","leadership","problem solving","critical thinking","time management",
-"excel","power bi","tableau","matplotlib","seaborn"
+"excel","power bi","tableau","matplotlib","seaborn","nestjs",
+"vite",
+"prisma",
+"socket.io",
+"jwt",
+"oauth",
+"graphql",
+"supabase",
+"firebase auth",
+"vercel",
+"netlify",
+"railway",
+"render",
 ]
 
 # -------------------------------
@@ -100,12 +110,16 @@ SKILLS_DB = [
 SKILL_SYNONYMS = {
     "machine learning": ["ml"],
     "deep learning": ["dl"],
-    "javascript": ["js"],
+    "javascript": ["js","ecmascript"],
     "typescript": ["ts"],
     "nodejs": ["node.js"],
-    "react": ["reactjs"],
+    "react": ["reactjs","react.js"],
+    "express": ["express.js"],
+    "nextjs": ["next.js"],
     "postgresql": ["postgres"],
     "ci cd": ["ci/cd"],
+    "rest api": ["restful api","rest apis"],
+    "aws": ["amazon web services"]
 }
 
 # Skill Extraction
@@ -288,16 +302,17 @@ def extract_candidate_info(raw_text):
 
 # Semantic similarity using sentence embeddings
 def semantic_similarity_embeddings(text1, text2):
-    embeddings = st_model.encode([text1, text2], convert_to_tensor=True)
+    model = get_model()
+    embeddings = model.encode([text1, text2], convert_to_tensor=True)
     score = util.pytorch_cos_sim(embeddings[0], embeddings[1])
-    return float(score) * 100  # scale 0-100
+    return max(0.0, min(100.0, float(score.item()) * 100))
 
 # Fuzzy skill matching
 def fuzzy_skill_match(resume_skills, jd_skills):
     matched = []
     for jd_skill in jd_skills:
         for r_skill in resume_skills:
-            if fuzz.ratio(jd_skill, r_skill) >= 85:
+            if fuzz.token_sort_ratio(jd_skill, r_skill) >= 80:
                 matched.append(jd_skill)
     return list(set(matched))
 
@@ -411,7 +426,10 @@ def analyze():
             # Fuzzy skill matching
             matched = fuzzy_skill_match(resume_skills, jd_skills)
             missing = sorted(list(set(jd_skills) - set(matched)))
-            skill_match_score = (len(matched) / len(jd_skills) * 100) if jd_skills else 0
+            if jd_skills:
+                 skill_match_score = (len(matched) / len(jd_skills)) * 100
+            else:
+                 skill_match_score = 0
             
             # Semantic similarity using embeddings
             # Validate resume text
@@ -434,7 +452,10 @@ def analyze():
                 
                 # Blend the fast keyword matching (TF-IDF) with the deep semantic model
                 embeddings_score = semantic_similarity_embeddings(resume_clean, jd_clean)
-                similarity_score = (tfidf_score + embeddings_score) / 2
+                similarity_score = (
+                                        0.35 * tfidf_score +
+                                        0.65 * embeddings_score
+                                    )
 
         # Remove fake similarity
         if similarity_score < 15:
@@ -448,7 +469,11 @@ def analyze():
             final_score = (0.5 * similarity_score) + (0.3 * skill_match_score) + (0.2 * exp_score)
         else:
             exp_score = 0
-            final_score = (0.6 * similarity_score) + (0.4 * skill_match_score)
+            final_score = (
+                            0.50 * similarity_score +
+                             0.35 * skill_match_score +
+                            0.15 * exp_score
+    )
 
         # Status
         status = "Passed" if final_score >= 60 else "Rejected"
