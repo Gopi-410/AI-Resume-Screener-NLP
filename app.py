@@ -306,7 +306,50 @@ def fuzzy_skill_match(resume_skills, jd_skills):
 # -------------------------------
 @app.route("/")
 def home():
-    return render_template("index.html")
+    # Try to render the rich frontend template. If it's missing or fails to
+    # render for any reason, fall back to a simple inline landing page so the
+    # root path never returns a bare 404/500 to visitors.
+    try:
+        return render_template("index.html")
+    except Exception as e:
+        print("WARNING: Failed to render index.html template:", str(e))
+        return """
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8" />
+            <title>AI Resume Screener &amp; NLP</title>
+            <style>
+                body {
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                    background: #060913;
+                    color: #f8fafc;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    min-height: 100vh;
+                    margin: 0;
+                    text-align: center;
+                }
+                .container { max-width: 600px; padding: 40px 20px; }
+                h1 { font-size: 2.2rem; margin-bottom: 12px; }
+                p { color: #94a3b8; line-height: 1.6; }
+                code {
+                    background: rgba(255,255,255,0.08);
+                    padding: 2px 8px;
+                    border-radius: 6px;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>🚀 AI Resume Screener &amp; NLP</h1>
+                <p>The API is up and running. Submit a resume and job description via
+                <code>POST /analyze</code> to get a match analysis.</p>
+            </div>
+        </body>
+        </html>
+        """
 
 @app.route("/graphs")
 def graphs():
