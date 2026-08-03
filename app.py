@@ -352,15 +352,17 @@ def semantic_similarity_embeddings(text1, text2):
     return max(0.0, min(100.0, float(score.item()) * 100))
 
 # Fuzzy skill matching
+# Only accept exact skill matches or very strong similarity to avoid false positives
 def fuzzy_skill_match(resume_skills, jd_skills):
     matched = []
     for jd_skill in jd_skills:
         for r_skill in resume_skills:
-            score = max(
-                fuzz.token_sort_ratio(jd_skill, r_skill),
-                fuzz.partial_ratio(jd_skill, r_skill)
-            )
-            if score >= 80:
+            if jd_skill == r_skill:
+                matched.append(jd_skill)
+                break
+
+            score = fuzz.token_sort_ratio(jd_skill, r_skill)
+            if score >= 90:
                 matched.append(jd_skill)
                 break
     return sorted(set(matched))
