@@ -43,7 +43,26 @@ def preprocess(text):
     if not text:
         return ""
     text = text.lower()
+    # Normalize common technology names
+    text = text.replace("node.js", "nodejs")
+    text = text.replace("node js", "nodejs")
+
+    text = text.replace("react.js", "react")
+    text = text.replace("react js", "react")
+
+    text = text.replace("express.js", "express")
+    text = text.replace("express js", "express")
+
+    text = text.replace("next.js", "nextjs")
+    text = text.replace("next js", "nextjs")
+
+    text = text.replace("ci/cd", "ci cd")
+    text = text.replace("restful apis", "rest api")
+    text = text.replace("restful api", "rest api")
+
+    # Remove extra spaces
     text = re.sub(r'[^a-zA-Z0-9\s+.#/-]', ' ', text)
+    text = re.sub(r"\s+", " ", text).strip()
     return text
 def is_valid_text(text):
     words = text.split()
@@ -132,14 +151,39 @@ COMPILED_SKILLS = {skill: _build_pattern(skill) for skill in SKILLS_DB}
 COMPILED_SYNONYMS = {skill: [_build_pattern(syn) for syn in syns] for skill, syns in SKILL_SYNONYMS.items()}
 
 def extract_skills(text):
+    text = preprocess(text)
     found = set()
+
+    # Match skills directly
     for skill, pattern in COMPILED_SKILLS.items():
         if pattern.search(text):
             found.add(skill)
+
+    # Match synonyms
     for skill, patterns in COMPILED_SYNONYMS.items():
-        if any(p.search(text) for p in patterns):
+        if any(pattern.search(text) for pattern in patterns):
             found.add(skill)
-    return list(found)
+
+    # Normalize common technology names
+    if "reactjs" in text:
+        found.add("react")
+
+    if "node.js" in text or "nodejs" in text:
+        found.add("nodejs")
+
+    if "express.js" in text or "expressjs" in text:
+        found.add("express")
+
+    if "next.js" in text or "nextjs" in text:
+        found.add("nextjs")
+
+    if "mongodb" in text:
+        found.add("mongodb")
+
+    if "mysql" in text:
+        found.add("mysql")
+
+    return sorted(found)
 
 # -------------------------------
 # Experience Extraction
@@ -312,9 +356,14 @@ def fuzzy_skill_match(resume_skills, jd_skills):
     matched = []
     for jd_skill in jd_skills:
         for r_skill in resume_skills:
-            if fuzz.token_sort_ratio(jd_skill, r_skill) >= 80:
+            score = max(
+                fuzz.token_sort_ratio(jd_skill, r_skill),
+                fuzz.partial_ratio(jd_skill, r_skill)
+            )
+            if score >= 80:
                 matched.append(jd_skill)
-    return list(set(matched))
+                break
+    return sorted(set(matched))
 
 # -------------------------------
 # Routes
@@ -377,9 +426,10 @@ def analyze():
         resume_file = request.files.get("resume_file")
 
         if resume_file and resume_file.filename != "":
-            if resume_file.filename.endswith(".pdf"):
+            filename_lower = resume_file.filename.lower()
+            if filename_lower.endswith(".pdf"):
                 resume = extract_pdf(resume_file)
-            elif resume_file.filename.endswith(".docx"):
+            elif filename_lower.endswith(".docx"):
                 resume = extract_docx(resume_file)
             else:
                 return jsonify({"error": "Unsupported file format. Please upload a PDF or DOCX file."}), 400
@@ -413,67 +463,59 @@ def analyze():
         jd_clean = jd_clean[:1000]
 
         # TF-IDF Cosine Similarity
-        if not jd_clean or not resume_clean:
-            similarity_score = 0.0
-            skill_match_score = 0.0
-            matched = []
-            missing = []
-        else:
+        resume_skills = []
+        jd_skills = []
+        matched = []
+        missing = []
+        skill_match_score = 0.0
+        tfidf_score = 0.0
+        embeddings_score = 0.0
+        similarity_score = 0.0
+
+        if jd_clean and resume_clean:
             # Extract skills
             resume_skills = extract_skills(resume_clean)
             jd_skills = extract_skills(jd_clean)
-            
+
             # Fuzzy skill matching
             matched = fuzzy_skill_match(resume_skills, jd_skills)
             missing = sorted(list(set(jd_skills) - set(matched)))
             if jd_skills:
-                 skill_match_score = (len(matched) / len(jd_skills)) * 100
-            else:
-                 skill_match_score = 0
-            
-            # Semantic similarity using embeddings
-            # Validate resume text
-            if not is_valid_text(resume_clean):
-                similarity_score = 0
-            else:
-                # Use skills instead of full text
-                resume_keywords = " ".join(resume_skills)
-                jd_keywords = " ".join(jd_skills)
+                skill_match_score = (len(matched) / len(jd_skills)) * 100
 
-                if resume_keywords and jd_keywords:
-                    try:
-                        vectorizer = TfidfVectorizer(token_pattern=r"(?u)\b\w+\b")
-                        vectors = vectorizer.fit_transform([resume_keywords, jd_keywords])
-                        tfidf_score = cosine_similarity(vectors[0:1], vectors[1:2])[0][0] * 100
-                    except ValueError:
-                        tfidf_score = 0
-                else:
+            # Semantic similarity using embeddings
+            if is_valid_text(resume_clean):
+                try:
+                    vectorizer = TfidfVectorizer(stop_words="english")
+                    vectors = vectorizer.fit_transform([resume_clean, jd_clean])
+                    tfidf_score = cosine_similarity(vectors[0:1], vectors[1:2])[0][0] * 100
+                except ValueError:
                     tfidf_score = 0
-                
-                # Blend the fast keyword matching (TF-IDF) with the deep semantic model
+
                 embeddings_score = semantic_similarity_embeddings(resume_clean, jd_clean)
-                similarity_score = (
-                                        0.35 * tfidf_score +
-                                        0.65 * embeddings_score
-                                    )
+                similarity_score = 0.35 * tfidf_score + 0.65 * embeddings_score
 
         # Remove fake similarity
         if similarity_score < 15:
             similarity_score = 0
-        
+
         # Experience
         resume_exp = extract_experience(resume_clean)
 
+        # Experience Score
         if jd_exp > 0:
             exp_score = min((resume_exp / jd_exp) * 100, 100)
-            final_score = (0.5 * similarity_score) + (0.3 * skill_match_score) + (0.2 * exp_score)
+            experience_display = round(exp_score, 2)
         else:
-            exp_score = 0
-            final_score = (
-                            0.50 * similarity_score +
-                             0.35 * skill_match_score +
-                            0.15 * exp_score
-    )
+            exp_score = 100          # Used only for final score
+            experience_display = "N/A"
+
+        # Final ATS Score
+        final_score = (
+            0.50 * similarity_score +
+            0.35 * skill_match_score +
+            0.15 * exp_score
+        )
 
         # Status
         status = "Passed" if final_score >= 60 else "Rejected"
@@ -481,24 +523,43 @@ def analyze():
         # Suggestions
         suggestions = generate_suggestions(missing, final_score)
 
+        print("\n========== ATS DEBUG ==========")
+        print("Resume Skills:", resume_skills)
+        print("JD Skills:", jd_skills)
+        print("Matched Skills:", matched)
+        print("Missing Skills:", missing)
+        print("TF-IDF Score:", round(tfidf_score, 2))
+        print("Embedding Score:", round(embeddings_score, 2))
+        print("Similarity Score:", round(similarity_score, 2))
+        print("Skill Match Score:", round(skill_match_score, 2))
+        print("Experience Score:", round(exp_score, 2))
+        print("Final Score:", round(final_score, 2))
+        print("================================\n")
+
 
 
         # Build flat response
         return jsonify({
-            "name": nlp_profile.get("name", "Not Found"),
-            "email": nlp_profile.get("email", "Not Found"),
-            "phone": nlp_profile.get("phone", "Not Found"),
-            "education": nlp_profile.get("education", []),
-            "similarity_score": round(similarity_score, 2),
-            "skill_match_score": round(skill_match_score, 2),
-            "final_score": round(final_score, 2),
-            "experience_match": round(exp_score, 2),
-            "status": status,
-            "matched_skills": matched,
-            "missing_skills": missing,
-            "suggestions": suggestions,
-            "links": links
-        })
+    "name": nlp_profile.get("name", "Not Found"),
+    "email": nlp_profile.get("email", "Not Found"),
+    "phone": nlp_profile.get("phone", "Not Found"),
+    "education": nlp_profile.get("education", []),
+
+    "tfidf_score": round(tfidf_score, 2),
+    "embedding_score": round(embeddings_score, 2),
+    "similarity_score": round(similarity_score, 2),
+    "skill_match_score": round(skill_match_score, 2),
+    "experience_match": experience_display,
+    "final_score": round(final_score, 2),
+
+    "status": status,
+
+    "matched_skills": matched,
+    "missing_skills": missing,
+
+    "suggestions": suggestions,
+    "links": links
+})
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
